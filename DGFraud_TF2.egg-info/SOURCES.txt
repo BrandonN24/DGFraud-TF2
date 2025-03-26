@@ -1,0 +1,8 @@
+LICENSE
+README.md
+setup.py
+DGFraud_TF2.egg-info/PKG-INFO
+DGFraud_TF2.egg-info/SOURCES.txt
+DGFraud_TF2.egg-info/dependency_links.txt
+DGFraud_TF2.egg-info/requires.txt
+DGFraud_TF2.egg-info/top_level.txt

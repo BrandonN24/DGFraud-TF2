@@ -17,6 +17,11 @@ from algorithms.GraphConsis.GraphConsis import GraphConsis
 from utils.data_loader import load_data_yelp
 from utils.utils import preprocess_feature
 
+import warnings
+
+# Suppress this specific warning
+warnings.filterwarnings('ignore', category=RuntimeWarning, message='invalid value encountered in divide')
+
 # init the common args, expect the model specific args
 parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=717, help='random seed')
