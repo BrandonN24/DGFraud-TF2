@@ -7,7 +7,6 @@ https://github.com/safe-graph/DGFraud-TF2
 from typing import Tuple, Union
 import scipy.sparse as sp
 import numpy as np
-# adding another line 
 
 def sparse_to_tuple(sparse_mx: sp.coo_matrix) -> Tuple[np.array, np.array,
                                                        np.array]:

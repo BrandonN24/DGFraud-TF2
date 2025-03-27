@@ -164,11 +164,6 @@ The repository is organized as follows:
 | **HACUD** | Financial Fraud | Heterogeneous | GAT |
 
 
-
+## anotehr 
 ## How to Contribute
 You are welcomed to contribute to this open-source toolbox. Currently, you can create PR or email to [bdscsafegraph@gmail.com](mailto:bdscsafegraph@gmail.com) for inquiry.
-
-
-
-
-# extra lines 
