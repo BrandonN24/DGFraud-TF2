@@ -1,0 +1,17 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Run GraphConsis Main",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "algorithms.GraphConsis.GraphConsis_main",
+            "args": [],
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        }
+    ]
+}
