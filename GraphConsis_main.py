@@ -109,9 +109,23 @@ def GraphConsis_main(neigh_dicts, features, labels, masks, num_classes, args):
     print("Testing...")
     results = model(build_batch(test_nodes, neigh_dicts,
                                 args.sample_sizes, features), features)
+    
+        # F1 score, precision, recall, etc.
+    # You can use sklearn.metrics to calculate these metrics
+    from sklearn.metrics import f1_score, precision_score, recall_score
+    f1 = f1_score(labels[test_nodes], results.numpy().argmax(axis=1), average='weighted')
+    precision = precision_score(labels[test_nodes], results.numpy().argmax(axis=1), average='weighted')
+    recall = recall_score(labels[test_nodes], results.numpy().argmax(axis=1), average='weighted')
+    print(f"F1 score: {f1:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}")
+
+    # ROC-AUC score
+    from sklearn.metrics import roc_auc_score
+    roc_auc = roc_auc_score(labels[test_nodes], results.numpy()[:, 1])
     test_acc = accuracy_score(labels[test_nodes],
                               results.numpy().argmax(axis=1))
+    print(f"Roc Auc:{roc_auc:.4f}")
     print(f"Test acc: {test_acc:.4f}")
+   
 
 
 def build_batch(nodes: list, neigh_dicts: dict, sample_sizes: list,
@@ -163,7 +177,7 @@ def build_batch(nodes: list, neigh_dicts: dict, sample_sizes: list,
 def compute_diffusion_matrix(dst_nodes, neigh_dict, sample_size,
                              max_node_id, features):
     def calc_consistency_score(n, ns):
-        # Equation 3 in the paper
+        # Equation 3 in the paper # sampling threshold figure out a way to adapt epsilon
         consis = tf.exp(-tf.pow(tf.norm(tf.tile([features[n]], [len(ns), 1]) -
                                         features[ns], axis=1), 2))
         consis = tf.where(consis > args.eps, consis, 0)
@@ -185,7 +199,7 @@ def compute_diffusion_matrix(dst_nodes, neigh_dict, sample_size,
         return v
 
     # sample neighbors
-    adj_mat_full = np.stack([vectorize(sample(n, neigh_dict[n]))
+    adj_mat_full = np.stack([vectorize(sample(n, neigh_dict[n])) # change number 1
                              for n in dst_nodes])
     nonzero_cols_mask = np.any(adj_mat_full.astype(np.bool), axis=0)
 
