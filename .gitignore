@@ -1,6 +1,7 @@
 
 *.mat
 /.idea
-/__pycache__/
+__pycache__/
 /.vscode
 /.venv/
+*.py[cod]
