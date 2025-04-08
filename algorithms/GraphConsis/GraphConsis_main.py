@@ -16,7 +16,7 @@ import tensorflow as tf
 from algorithms.GraphConsis.GraphConsis import GraphConsis
 from utils.data_loader import load_data_yelp
 from utils.utils import preprocess_feature
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, f1_score, precision_score, roc_auc_score, accuracy_score
 import matplotlib.pyplot as plt
 
 import warnings
@@ -47,6 +47,25 @@ args = parser.parse_args()
 np.random.seed(args.seed)
 tf.random.set_seed(args.seed)
 
+# F1 score, precision, recall, etc.
+# You can use sklearn.metrics to calculate these metrics
+def print_metrics(true_labels, logits, hard_preds, num_classes):
+    acc = accuracy_score(true_labels, hard_preds)
+    prec = precision_score(true_labels, hard_preds, average='macro', zero_division=0)
+    f1 = f1_score(true_labels, hard_preds, average='macro', zero_division=0)
+    cm = confusion_matrix(true_labels, hard_preds)
+    if num_classes == 2:
+        # Convert logits to float32 for softmax and then compute probabilities.
+        probs = tf.nn.softmax(tf.convert_to_tensor(logits.astype(np.float32))).numpy()[:, 1]
+        auc = roc_auc_score(true_labels, probs)
+    else:
+        auc = roc_auc_score(true_labels, logits, multi_class='ovr')
+    print(f"Accuracy:  {acc:.4f}")
+    print(f"Precision: {prec:.4f}")
+    print(f"F1-score:  {f1:.4f}")
+    print(f"AUC:       {auc:.4f}")
+    print("Confusion Matrix:")
+    print(cm)
 
 def GraphConsis_main(neigh_dicts, features, labels, masks, num_classes, args):
 
@@ -101,54 +120,26 @@ def GraphConsis_main(neigh_dicts, features, labels, masks, num_classes, args):
         val_results = model(build_batch(val_nodes, neigh_dicts,
                                         args.sample_sizes, features), features)
         loss = loss_fn(tf.convert_to_tensor(labels[val_nodes]), val_results)
-        val_acc = accuracy_score(labels[val_nodes],
-                                 val_results.numpy().argmax(axis=1))
-        print(f" Epoch: {epoch:d}, "
-              f"loss: {loss.numpy():.4f}, "
-              f"acc: {val_acc:.4f}")
+        print(f" Epoch: {epoch:d} loss: {loss.numpy():.4f}")
+        print_metrics(labels[val_nodes], val_results.numpy(), val_results.numpy().argmax(axis=1), num_classes)
 
     # testing
-    print("Testing...")
+    print("\nTesting...")
     results = model(build_batch(test_nodes, neigh_dicts,
                                 args.sample_sizes, features), features)
-    
-    # F1 score, precision, recall, etc.
-    # You can use sklearn.metrics to calculate these metrics
-    from sklearn.metrics import f1_score, precision_score, recall_score
-    f1 = f1_score(labels[test_nodes], results.numpy().argmax(axis=1), average='weighted')
-    precision = precision_score(labels[test_nodes], results.numpy().argmax(axis=1), average='weighted')
-    recall = recall_score(labels[test_nodes], results.numpy().argmax(axis=1), average='weighted')
-    print(f"F1 score:\t{f1:.4f}\nPrecision:\t{precision:.4f}\nRecall:\t{recall:.4f}")
-
-    # ROC-AUC score
-    from sklearn.metrics import roc_auc_score
-    roc_auc = roc_auc_score(labels[test_nodes], results.numpy()[:, 1])
-    test_acc = accuracy_score(labels[test_nodes],
-                              results.numpy().argmax(axis=1))
-    print(f"ROC-AUC:\t{roc_auc:.4f}")
-
-    # Calculate and plot confusion matrix
-    y_true = labels[test_nodes].flatten()
-    y_pred = results.numpy().argmax(axis=1)
-
-    # Create the confusion matrix
-    cm = confusion_matrix(y_true, y_pred)
-
-    # Print the raw confusion matrix
-    print("Confusion Matrix:")
-    print(cm)
+    loss = loss_fn(tf.convert_to_tensor(labels[test_nodes]), results)
+    print(f" loss: {loss.numpy():.4f}")
+    print_metrics(labels[test_nodes], results.numpy(), results.numpy().argmax(axis=1), num_classes)
 
     # Create a visual display of the confusion matrix
-    disp = ConfusionMatrixDisplay(confusion_matrix=cm)
+    # disp = ConfusionMatrixDisplay(confusion_matrix=cm)
 
-    # Plot the confusion matrix
-    plt.figure(figsize=(10, 8))
-    disp.plot(cmap=plt.cm.Blues, values_format='d')
-    plt.title('Confusion Matrix for GraphConsis')
-    plt.savefig('confusion_matrix.png')
-    plt.close() 
-
-    print(f"Test acc: {test_acc:.4f}")
+    # # Plot the confusion matrix
+    # plt.figure(figsize=(10, 8))
+    # disp.plot(cmap=plt.cm.Blues, values_format='d')
+    # plt.title('Confusion Matrix for GraphConsis')
+    # plt.savefig('confusion_matrix.png')
+    # plt.close() 
    
 
 
