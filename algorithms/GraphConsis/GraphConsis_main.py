@@ -16,6 +16,8 @@ import tensorflow as tf
 from algorithms.GraphConsis.GraphConsis import GraphConsis
 from utils.data_loader import load_data_yelp
 from utils.utils import preprocess_feature
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+import matplotlib.pyplot as plt
 
 import warnings
 
@@ -25,7 +27,7 @@ warnings.filterwarnings('ignore', category=RuntimeWarning, message='invalid valu
 # init the common args, expect the model specific args
 parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=717, help='random seed')
-parser.add_argument('--epochs', type=int, default=5,
+parser.add_argument('--epochs', type=int, default=1,
                     help='number of epochs to train')
 parser.add_argument('--batch_size', type=int, default=512, help='batch size')
 parser.add_argument('--train_size', type=float, default=0.8,
@@ -110,20 +112,42 @@ def GraphConsis_main(neigh_dicts, features, labels, masks, num_classes, args):
     results = model(build_batch(test_nodes, neigh_dicts,
                                 args.sample_sizes, features), features)
     
-        # F1 score, precision, recall, etc.
+    # F1 score, precision, recall, etc.
     # You can use sklearn.metrics to calculate these metrics
     from sklearn.metrics import f1_score, precision_score, recall_score
     f1 = f1_score(labels[test_nodes], results.numpy().argmax(axis=1), average='weighted')
     precision = precision_score(labels[test_nodes], results.numpy().argmax(axis=1), average='weighted')
     recall = recall_score(labels[test_nodes], results.numpy().argmax(axis=1), average='weighted')
-    print(f"F1 score: {f1:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}")
+    print(f"F1 score:\t{f1:.4f}\nPrecision:\t{precision:.4f}\nRecall:\t{recall:.4f}")
 
     # ROC-AUC score
     from sklearn.metrics import roc_auc_score
     roc_auc = roc_auc_score(labels[test_nodes], results.numpy()[:, 1])
     test_acc = accuracy_score(labels[test_nodes],
                               results.numpy().argmax(axis=1))
-    print(f"Roc Auc:{roc_auc:.4f}")
+    print(f"ROC-AUC:\t{roc_auc:.4f}")
+
+    # Calculate and plot confusion matrix
+    y_true = labels[test_nodes].flatten()
+    y_pred = results.numpy().argmax(axis=1)
+
+    # Create the confusion matrix
+    cm = confusion_matrix(y_true, y_pred)
+
+    # Print the raw confusion matrix
+    print("Confusion Matrix:")
+    print(cm)
+
+    # Create a visual display of the confusion matrix
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm)
+
+    # Plot the confusion matrix
+    plt.figure(figsize=(10, 8))
+    disp.plot(cmap=plt.cm.Blues, values_format='d')
+    plt.title('Confusion Matrix for GraphConsis')
+    plt.savefig('confusion_matrix.png')
+    plt.close() 
+
     print(f"Test acc: {test_acc:.4f}")
    
 
