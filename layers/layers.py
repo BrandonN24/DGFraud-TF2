@@ -436,7 +436,7 @@ class ConsisMeanAggregator(SageMeanAggregator):
         :param tensor relation_vec: 1d corresponding relation vector
         :param tensor attention_vec: 1d layers shared attention weights vector
         """
-        # Equation 5,6 in the paper - second area of improvement for project
+        # Equation 5,6 in the paper  # can change this for improvement because of weights - second area of improvement for project
         x = super().__call__(dstsrc_features, dstsrc2src, dstsrc2dst, dif_mat)
         relation_features = tf.tile([relation_vec], [x.shape[0], 1])
         alpha = tf.matmul(tf.concat([x, relation_features], 1), attention_vec)
