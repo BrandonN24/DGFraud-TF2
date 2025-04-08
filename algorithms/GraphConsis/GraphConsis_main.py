@@ -179,11 +179,7 @@ def compute_diffusion_matrix(dst_nodes, neigh_dict, sample_size,
     # n - node
     # ns - neighbors of n
     def calc_consistency_score(n, ns):
-<<<<<<< HEAD:algorithms/GraphConsis/GraphConsis_main.py
         # Equation 3 in the paper - adapt this function - need find out a have to adapt epsilon or transform the purpose of epsilon into a mini-classifier.
-=======
-        # Equation 3 in the paper # sampling threshold figure out a way to adapt epsilon
->>>>>>> christina:GraphConsis_main.py
         consis = tf.exp(-tf.pow(tf.norm(tf.tile([features[n]], [len(ns), 1]) -
                                         features[ns], axis=1), 2))
         consis = tf.where(consis > args.eps, consis, 0)
