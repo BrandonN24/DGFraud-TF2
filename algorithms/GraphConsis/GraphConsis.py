@@ -15,6 +15,7 @@ import tensorflow as tf
 from tensorflow import keras
 
 from layers.layers import ConsisMeanAggregator
+from layers.layers import ImprovedConsisMeanAggregator
 
 init_fn = tf.keras.initializers.GlorotUniform
 
@@ -25,7 +26,7 @@ class GraphConsis(keras.Model):
     """
 
     def __init__(self, features_dim: int, internal_dim: int, num_layers: int,
-                 num_classes: int, num_relations: int) -> None:
+                 num_classes: int, num_relations: int, num_heads: int = 4) -> None:
         """
         :param int features_dim: input dimension
         :param int internal_dim: hidden layer dimension
@@ -42,8 +43,12 @@ class GraphConsis(keras.Model):
         for i in range(1, num_layers + 1):
             layer_name = "agg_lv" + str(i)
             input_dim = internal_dim if i > 1 else features_dim
-            aggregator_layer = ConsisMeanAggregator(input_dim, internal_dim,
-                                                    name=layer_name)
+            aggregator_layer = ImprovedConsisMeanAggregator(
+                input_dim,
+                internal_dim,
+                num_heads=num_heads,
+                num_relations=num_relations, # num_relations
+                name=layer_name)
             self.seq_layers.append(aggregator_layer)
 
         self.classifier = tf.keras.layers.Dense(num_classes,
@@ -70,9 +75,12 @@ class GraphConsis(keras.Model):
                                      minibatch.dif_mats.pop(),
                                      tf.nn.embedding_lookup(
                                          self.relation_vectors, i),
-                                     self.attention_vec
+                                     attention_vec = self.attention_vec,
+                                     relation_vectors=self.relation_vectors, # new argument
                                      )
             xs.append(x)
 
-        return self.classifier(tf.nn.l2_normalize(tf.reduce_sum(
-            tf.stack(xs, 1), axis=1, keepdims=False), 1))
+        return self.classifier(tf.nn.l2_normalize(
+            tf.reduce_sum(
+                tf.stack(xs, 1), axis=1, keepdims=False), 1)
+        )

@@ -27,7 +27,7 @@ warnings.filterwarnings('ignore', category=RuntimeWarning, message='invalid valu
 # init the common args, expect the model specific args
 parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=717, help='random seed')
-parser.add_argument('--epochs', type=int, default=1,
+parser.add_argument('--epochs', type=int, default=4,
                     help='number of epochs to train')
 parser.add_argument('--batch_size', type=int, default=512, help='batch size')
 parser.add_argument('--train_size', type=float, default=0.8,
@@ -49,7 +49,7 @@ tf.random.set_seed(args.seed)
 
 # F1 score, precision, recall, etc.
 # You can use sklearn.metrics to calculate these metrics
-def print_metrics(true_labels, logits, hard_preds, num_classes):
+def print_metrics(true_labels, logits, hard_preds, num_classes, stage):
     acc = accuracy_score(true_labels, hard_preds)
     prec = precision_score(true_labels, hard_preds, average='macro', zero_division=0)
     f1 = f1_score(true_labels, hard_preds, average='macro', zero_division=0)
@@ -66,6 +66,16 @@ def print_metrics(true_labels, logits, hard_preds, num_classes):
     print(f"AUC:       {auc:.4f}")
     print("Confusion Matrix:")
     print(cm)
+
+    # Create a visual display of the confusion matrix
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm)
+
+    # Plot the confusion matrix
+    plt.figure(figsize=(10, 8))
+    disp.plot(cmap=plt.cm.Blues, values_format='d')
+    plt.title('Confusion Matrix for GraphConsis')
+    plt.savefig(f'confusion_matrix_{stage}.png')
+    plt.close() 
 
 def GraphConsis_main(neigh_dicts, features, labels, masks, num_classes, args):
 
@@ -92,8 +102,12 @@ def GraphConsis_main(neigh_dicts, features, labels, masks, num_classes, args):
         labels = all_labels[mini_batch_nodes]
         yield (batch, labels)
 
+    # Add num_heads parameter to args
+    if not hasattr(args, 'num_heads'):
+        args.num_heads = 4 # Default number of attention heads
+
     model = GraphConsis(features.shape[-1], args.nhid,
-                        len(args.sample_sizes), num_classes, len(neigh_dicts))
+                        len(args.sample_sizes), num_classes, len(neigh_dicts), num_heads=args.num_heads)
     optimizer = tf.keras.optimizers.SGD(learning_rate=args.lr)
     loss_fn = tf.keras.losses.SparseCategoricalCrossentropy()
 
@@ -120,26 +134,16 @@ def GraphConsis_main(neigh_dicts, features, labels, masks, num_classes, args):
         val_results = model(build_batch(val_nodes, neigh_dicts,
                                         args.sample_sizes, features), features)
         loss = loss_fn(tf.convert_to_tensor(labels[val_nodes]), val_results)
-        print(f" Epoch: {epoch:d} loss: {loss.numpy():.4f}")
-        print_metrics(labels[val_nodes], val_results.numpy(), val_results.numpy().argmax(axis=1), num_classes)
+        print(f" Epoch: {epoch:d}\nLoss: {loss.numpy():.4f}")
+        print_metrics(labels[val_nodes], val_results.numpy(), val_results.numpy().argmax(axis=1), num_classes, stage=f'val_e{epoch}')
 
     # testing
     print("\nTesting...")
     results = model(build_batch(test_nodes, neigh_dicts,
                                 args.sample_sizes, features), features)
     loss = loss_fn(tf.convert_to_tensor(labels[test_nodes]), results)
-    print(f" loss: {loss.numpy():.4f}")
-    print_metrics(labels[test_nodes], results.numpy(), results.numpy().argmax(axis=1), num_classes)
-
-    # Create a visual display of the confusion matrix
-    # disp = ConfusionMatrixDisplay(confusion_matrix=cm)
-
-    # # Plot the confusion matrix
-    # plt.figure(figsize=(10, 8))
-    # disp.plot(cmap=plt.cm.Blues, values_format='d')
-    # plt.title('Confusion Matrix for GraphConsis')
-    # plt.savefig('confusion_matrix.png')
-    # plt.close() 
+    print(f"Loss: {loss.numpy():.4f}")
+    print_metrics(labels[test_nodes], results.numpy(), results.numpy().argmax(axis=1), num_classes, stage='test')
    
 
 
