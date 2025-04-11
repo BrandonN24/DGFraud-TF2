@@ -116,10 +116,11 @@ def GraphConsis_main(neigh_dicts, features, labels, masks, num_classes, args):
 
     model = GraphConsis(features.shape[-1], args.nhid,
                         len(args.sample_sizes), num_classes, len(neigh_dicts), num_heads=args.num_heads)
-    print("Trainable variables:")
-    for var in model.trainable_weights:
-        print(var.name, var.shape)
-    print("Trainable variables end")
+    
+    # print("Trainable variables:")
+    # for var in model.trainable_weights:
+    #     print(var.name, var.shape)
+    # print("Trainable variables end")
 
     optimizer = tf.keras.optimizers.SGD(learning_rate=args.lr)
     loss_fn = tf.keras.losses.SparseCategoricalCrossentropy()
@@ -147,14 +148,16 @@ def GraphConsis_main(neigh_dicts, features, labels, masks, num_classes, args):
                 auc = roc_auc_score(inputs_labels, probs, multi_class='ovr')
 
             grads = tape.gradient(loss, model.trainable_weights)
+
             # Check gradient flow
-            print("Gradient flow check:")
-            for var, grad in zip(model.trainable_weights, grads):
-                if grad is None:
-                    print(f"{var.name}: No gradient (None)")
-                else:
-                    grad_mean = tf.reduce_mean(tf.abs(grad)).numpy()
-                    print(f"{var.name}: grad mean = {grad_mean:.6f}")
+            # print("Gradient flow check:")
+            # for var, grad in zip(model.trainable_weights, grads):
+            #     if grad is None:
+            #         print(f"{var.name}: No gradient (None)")
+            #     else:
+            #         grad_mean = tf.reduce_mean(tf.abs(grad)).numpy()
+            #         print(f"{var.name}: grad mean = {grad_mean:.6f}")
+
             optimizer.apply_gradients(zip(grads, model.trainable_weights))
             
             print(f" loss: {loss.numpy():.4f}, acc: {acc:.4f}, Precision: {prec:.4f}, Recall:  {recall:.4f}, F1-score:  {f1:.4f}, AUC:  {auc:.4f}")
