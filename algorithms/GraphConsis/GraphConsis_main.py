@@ -55,9 +55,9 @@ tf.random.set_seed(args.seed)
 # You can use sklearn.metrics to calculate these metrics
 def print_metrics(true_labels, logits, hard_preds, num_classes, stage):
     acc = accuracy_score(true_labels, hard_preds)
-    prec = precision_score(true_labels, hard_preds, average='macro', zero_division=0)
-    recall = recall_score(true_labels, hard_preds, average='macro', zero_division=0)
-    f1 = f1_score(true_labels, hard_preds, average='macro', zero_division=0)
+    prec = precision_score(true_labels, hard_preds, zero_division=0)
+    recall = recall_score(true_labels, hard_preds, zero_division=0)
+    f1 = f1_score(true_labels, hard_preds, zero_division=0)
     cm = confusion_matrix(true_labels, hard_preds)
     if num_classes == 2:
         # Convert logits to float32 for softmax and then compute probabilities.
@@ -139,9 +139,9 @@ def GraphConsis_main(neigh_dicts, features, labels, masks, num_classes, args):
                 loss = loss_fn(tf.convert_to_tensor(inputs_labels), predicted)
                 acc = accuracy_score(inputs_labels,
                                      predicted.numpy().argmax(axis=1))
-                prec = precision_score(inputs_labels, predicted.numpy().argmax(axis=1), average='macro', zero_division=0)
-                recall = recall_score(inputs_labels, predicted.numpy().argmax(axis=1), average='macro', zero_division=0)
-                f1 = f1_score(inputs_labels, predicted.numpy().argmax(axis=1), average='macro', zero_division=0)
+                prec = precision_score(inputs_labels, predicted.numpy().argmax(axis=1), zero_division=0)
+                recall = recall_score(inputs_labels, predicted.numpy().argmax(axis=1), zero_division=0)
+                f1 = f1_score(inputs_labels, predicted.numpy().argmax(axis=1), zero_division=0)
                 # getting probabilities for AUC calculation
                 probs = tf.nn.softmax(tf.convert_to_tensor(predicted.numpy().astype(np.float32))).numpy()[:, 1]
                 auc = roc_auc_score(inputs_labels, probs, multi_class='ovr')
