@@ -472,22 +472,38 @@ class ImprovedConsisMeanAggregator(SageMeanAggregator):
     
         # Create relation importance weights for each head
         # This allows the model to learn which heads are most important for which relation types
-        self.relation_importance = tf.Variable(
-            tf.random.uniform([self.num_relations, self.num_heads], dtype=tf.float32),
-            name=f"{kwargs.get('name', 'unnamed')}_relation_importance"
+        self.relation_importance = self.add_weight(
+            shape=(self.num_relations, self.num_heads),
+            initializer="glorot_uniform",
+            trainable=True,
+            name="relation_importance"
         )
 
         # Create multiple attention vectors instead of just one
-        self.attention_vectors = tf.Variable(
-            tf.random.uniform([num_heads, 2 * self.head_dim, 1], dtype=tf.float32),
-            name=f"{kwargs.get('name', 'attention_vectors')}"
+        self.attention_vectors = self.add_weight(
+            shape=(self.num_heads, 2 * self.head_dim, 1),
+            initializer="glorot_uniform",
+            trainable=True,
+            name="attention_vectors"
+        )
+
+        self.gate_weights = self.add_weight(
+            shape=(self.num_heads, 2 * self.head_dim, 1),
+            initializer="glorot_uniform",
+            trainable=True,
+            name="gate_weights"
         )
 
         # Output projection to go from (num_heads * dst_dim) back to dst_dim
-        self.output_projection = tf.Variable(
-            tf.random.uniform([dst_dim, dst_dim], dtype=tf.float32),
-            name=f"{kwargs.get('name', 'unnamed')}_output_projection"
+        self.output_projection = self.add_weight(
+            shape=(dst_dim, dst_dim),
+            initializer="glorot_uniform",
+            trainable=True,
+            name="output_projection"
         )
+
+        self.norm = tf.keras.layers.LayerNormalization(epsilon=1e-5)
+
     def __call__(self, dstsrc_features, dstsrc2src, dstsrc2dst, dif_mat,
                  relation_vec, relation_vectors, attention_vec):
         """
@@ -530,16 +546,19 @@ class ImprovedConsisMeanAggregator(SageMeanAggregator):
             end_idx = (h + 1) * self.head_dim
 
             # Extract slices for this head
-            x_slice =  x[:, start_idx:end_idx] # [1147, 32]
+            x_slice =  x[:, start_idx:end_idx] # [1147, 32] if using 4 heads
+            # dimension of x is [batch_size, dst_dim / num_heads] dst_dim is 128 always.
 
-            relation_slice = relation_features[:, start_idx:end_idx] # [1147, 32]
+            relation_slice = relation_features[:, start_idx:end_idx] # [1147, 32] if using 4 heads
 
             # Concatenate x and relation_features for attention computation
             # Concatenate node features with relation features for this head
-            head_concat_features = tf.concat([x_slice, relation_slice], axis=1) # [1147, 64]
+            head_concat_features = tf.concat([x_slice, relation_slice], axis=1) # [1147, 64] if using 4 heads
+
+            head_concat_features = self.norm(head_concat_features)
 
             # Use class-specific attention vectors instead of passed attention_vec param.
-            head_attention_vec = self.attention_vectors[h] # [64 , 1]
+            head_attention_vec = self.attention_vectors[h] # [64 , 1] if using 4 heads
 
             # Compute attention scores for each head
             # alpha shape: [batch_size, 1] - [1147, 1]
@@ -548,8 +567,18 @@ class ImprovedConsisMeanAggregator(SageMeanAggregator):
                 head_attention_vec
             )
 
+            # Gating score (between 0 and 1) relu with clipping
+            gate = tf.nn.relu(tf.matmul(head_concat_features, self.gate_weights[h]))  # shape: [batch_size, 1]
+            gate = tf.clip_by_value(gate, 0.0, 1.0)
+
+            # Apply the gate to alpha
+            alpha = alpha * gate  # element-wise multiplication
+
             # Apply the relation-specific importance for this head
-            alpha = alpha * relation_scale[h]
+            if h == 0 and self.num_heads == 1:
+                alpha = alpha * relation_scale
+            else:
+                alpha = alpha * relation_scale[h]
 
             # Apply attention to this head's feature slice
             alpha_expanded = tf.tile(alpha, [1, self.head_dim])

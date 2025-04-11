@@ -16,7 +16,7 @@ import tensorflow as tf
 from algorithms.GraphConsis.GraphConsis import GraphConsis
 from utils.data_loader import load_data_yelp
 from utils.utils import preprocess_feature
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, f1_score, precision_score, roc_auc_score, accuracy_score
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, f1_score, precision_score, roc_auc_score, accuracy_score, recall_score
 import matplotlib.pyplot as plt
 
 import warnings
@@ -27,7 +27,7 @@ warnings.filterwarnings('ignore', category=RuntimeWarning, message='invalid valu
 # init the common args, expect the model specific args
 parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=717, help='random seed')
-parser.add_argument('--epochs', type=int, default=4,
+parser.add_argument('--epochs', type=int, default=5,
                     help='number of epochs to train')
 parser.add_argument('--batch_size', type=int, default=512, help='batch size')
 parser.add_argument('--train_size', type=float, default=0.8,
@@ -41,6 +41,10 @@ parser.add_argument('--identity_dim', type=int, default=0,
                     help='dimension of context embedding')
 parser.add_argument('--eps', type=float, default=0.001,
                     help='consistency score threshold ε')
+# Add to the argument parser in GraphConsis_main.py
+parser.add_argument('--num_heads', type=int, default=2,
+                    help='number of attention heads for multi-head attention')
+
 args = parser.parse_args()
 
 # set seed
@@ -52,6 +56,7 @@ tf.random.set_seed(args.seed)
 def print_metrics(true_labels, logits, hard_preds, num_classes, stage):
     acc = accuracy_score(true_labels, hard_preds)
     prec = precision_score(true_labels, hard_preds, average='macro', zero_division=0)
+    recall = recall_score(true_labels, hard_preds, average='macro', zero_division=0)
     f1 = f1_score(true_labels, hard_preds, average='macro', zero_division=0)
     cm = confusion_matrix(true_labels, hard_preds)
     if num_classes == 2:
@@ -62,6 +67,7 @@ def print_metrics(true_labels, logits, hard_preds, num_classes, stage):
         auc = roc_auc_score(true_labels, logits, multi_class='ovr')
     print(f"Accuracy:  {acc:.4f}")
     print(f"Precision: {prec:.4f}")
+    print(f'Recall:    {recall:.4f}')
     print(f"F1-score:  {f1:.4f}")
     print(f"AUC:       {auc:.4f}")
     print("Confusion Matrix:")
@@ -104,10 +110,17 @@ def GraphConsis_main(neigh_dicts, features, labels, masks, num_classes, args):
 
     # Add num_heads parameter to args
     if not hasattr(args, 'num_heads'):
-        args.num_heads = 4 # Default number of attention heads
+        args.num_heads = 2 # Default number of attention heads
+
+    print(args.num_heads)
 
     model = GraphConsis(features.shape[-1], args.nhid,
                         len(args.sample_sizes), num_classes, len(neigh_dicts), num_heads=args.num_heads)
+    print("Trainable variables:")
+    for var in model.trainable_weights:
+        print(var.name, var.shape)
+    print("Trainable variables end")
+
     optimizer = tf.keras.optimizers.SGD(learning_rate=args.lr)
     loss_fn = tf.keras.losses.SparseCategoricalCrossentropy()
 
@@ -122,19 +135,38 @@ def GraphConsis_main(neigh_dicts, features, labels, masks, num_classes, args):
 
             with tf.GradientTape() as tape:
                 predicted = model(inputs, features)
+                # calculate training metrics
                 loss = loss_fn(tf.convert_to_tensor(inputs_labels), predicted)
                 acc = accuracy_score(inputs_labels,
                                      predicted.numpy().argmax(axis=1))
+                prec = precision_score(inputs_labels, predicted.numpy().argmax(axis=1), average='macro', zero_division=0)
+                recall = recall_score(inputs_labels, predicted.numpy().argmax(axis=1), average='macro', zero_division=0)
+                f1 = f1_score(inputs_labels, predicted.numpy().argmax(axis=1), average='macro', zero_division=0)
+                # getting probabilities for AUC calculation
+                probs = tf.nn.softmax(tf.convert_to_tensor(predicted.numpy().astype(np.float32))).numpy()[:, 1]
+                auc = roc_auc_score(inputs_labels, probs, multi_class='ovr')
+
             grads = tape.gradient(loss, model.trainable_weights)
+            # Check gradient flow
+            print("Gradient flow check:")
+            for var, grad in zip(model.trainable_weights, grads):
+                if grad is None:
+                    print(f"{var.name}: No gradient (None)")
+                else:
+                    grad_mean = tf.reduce_mean(tf.abs(grad)).numpy()
+                    print(f"{var.name}: grad mean = {grad_mean:.6f}")
             optimizer.apply_gradients(zip(grads, model.trainable_weights))
-            print(f" loss: {loss.numpy():.4f}, acc: {acc:.4f}")
+            
+            print(f" loss: {loss.numpy():.4f}, acc: {acc:.4f}, Precision: {prec:.4f}, Recall:  {recall:.4f}, F1-score:  {f1:.4f}, AUC:  {auc:.4f}")
 
         # validation
         print("Validating...")
         val_results = model(build_batch(val_nodes, neigh_dicts,
                                         args.sample_sizes, features), features)
         loss = loss_fn(tf.convert_to_tensor(labels[val_nodes]), val_results)
+        # Printing loss for validation set
         print(f" Epoch: {epoch:d}\nLoss: {loss.numpy():.4f}")
+        # Printing metrics for validation set
         print_metrics(labels[val_nodes], val_results.numpy(), val_results.numpy().argmax(axis=1), num_classes, stage=f'val_e{epoch}')
 
     # testing
@@ -142,7 +174,9 @@ def GraphConsis_main(neigh_dicts, features, labels, masks, num_classes, args):
     results = model(build_batch(test_nodes, neigh_dicts,
                                 args.sample_sizes, features), features)
     loss = loss_fn(tf.convert_to_tensor(labels[test_nodes]), results)
+    # Printing loss for test set
     print(f"Loss: {loss.numpy():.4f}")
+    # Printing metrics for test set
     print_metrics(labels[test_nodes], results.numpy(), results.numpy().argmax(axis=1), num_classes, stage='test')
    
 
