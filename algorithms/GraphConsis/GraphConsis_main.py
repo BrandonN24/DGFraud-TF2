@@ -79,8 +79,9 @@ def print_metrics(true_labels, logits, hard_preds, num_classes, stage):
     # Plot the confusion matrix
     plt.figure(figsize=(10, 8))
     disp.plot(cmap=plt.cm.Blues, values_format='d')
-    plt.title('Confusion Matrix for GraphConsis')
-    plt.savefig(f'confusion_matrix_{stage}.png')
+    plt.title(f'{stage} Confusion Matrix')
+    stage_filename = stage.replace(" ", "").replace("|", "_").replace(":", "_")
+    plt.savefig(f'confusion_matrix_{stage_filename}.png')
     plt.close() 
 
 def GraphConsis_main(neigh_dicts, features, labels, masks, num_classes, args):
@@ -150,7 +151,7 @@ def GraphConsis_main(neigh_dicts, features, labels, masks, num_classes, args):
             grads = tape.gradient(loss, model.trainable_weights)
 
             # Check gradient flow
-            # print("Gradient flow check:")
+            # print("\nGradient flow check:")
             # for var, grad in zip(model.trainable_weights, grads):
             #     if grad is None:
             #         print(f"{var.name}: No gradient (None)")
@@ -170,7 +171,7 @@ def GraphConsis_main(neigh_dicts, features, labels, masks, num_classes, args):
         # Printing loss for validation set
         print(f" Epoch: {epoch:d}\nLoss: {loss.numpy():.4f}")
         # Printing metrics for validation set
-        print_metrics(labels[val_nodes], val_results.numpy(), val_results.numpy().argmax(axis=1), num_classes, stage=f'val_e{epoch}')
+        print_metrics(labels[val_nodes], val_results.numpy(), val_results.numpy().argmax(axis=1), num_classes, stage=f'Validation | Epoch: {epoch}')
 
     # testing
     print("\nTesting...")
@@ -180,7 +181,7 @@ def GraphConsis_main(neigh_dicts, features, labels, masks, num_classes, args):
     # Printing loss for test set
     print(f"Loss: {loss.numpy():.4f}")
     # Printing metrics for test set
-    print_metrics(labels[test_nodes], results.numpy(), results.numpy().argmax(axis=1), num_classes, stage='test')
+    print_metrics(labels[test_nodes], results.numpy(), results.numpy().argmax(axis=1), num_classes, stage='Testing')
    
 
 

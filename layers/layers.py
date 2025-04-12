@@ -494,6 +494,13 @@ class ImprovedConsisMeanAggregator(SageMeanAggregator):
             name="gate_weights"
         )
 
+        self.gate_bias = self.add_weight(
+            shape=(self.num_heads, 1),
+            initializer=tf.keras.initializers.Constant(0.5),
+            trainable=True,
+            name="gate_bias"
+        )
+
         # Output projection to go from (num_heads * dst_dim) back to dst_dim
         self.output_projection = self.add_weight(
             shape=(dst_dim, dst_dim),
@@ -568,8 +575,11 @@ class ImprovedConsisMeanAggregator(SageMeanAggregator):
             )
 
             # Gating score (between 0 and 1) relu with clipping
-            gate = tf.nn.relu(tf.matmul(head_concat_features, self.gate_weights[h]))  # shape: [batch_size, 1]
-            gate = tf.clip_by_value(gate, 0.0, 1.0)
+            gate = tf.sigmoid(tf.matmul(head_concat_features, self.gate_weights[h]) + self.gate_bias[h]) # shape: [batch_size, 1]
+
+            # uncomment to use relu with clipping instead
+            # gate = tf.nn.relu(tf.matmul(head_concat_features, self.gate_weights[h]))  # shape: [batch_size, 1]
+            # gate = tf.clip_by_value(gate, 0.0, 1.0)
 
             # Apply the gate to alpha
             alpha = alpha * gate  # element-wise multiplication
@@ -579,6 +589,8 @@ class ImprovedConsisMeanAggregator(SageMeanAggregator):
                 alpha = alpha * relation_scale
             else:
                 alpha = alpha * relation_scale[h]
+
+            # tf.print("Alpha mean (head", h, "):", tf.reduce_mean(alpha), summarize=10)
 
             # Apply attention to this head's feature slice
             alpha_expanded = tf.tile(alpha, [1, self.head_dim])
