@@ -212,8 +212,8 @@ def compute_diffusion_matrix(dst_nodes, neigh_dict, sample_size,
     # ns - neighbors of n
     def calc_consistency_score(n, ns):
         # Equation 3 in the paper
-        consis = tf.exp(-tf.pow(tf.norm(tf.tile([features[n]], [len(ns), 1]) -
-                                        features[ns], axis=1), 2))
+        diff = tf.norm(tf.tile([features[n]], [len(ns), 1]) - features[ns], axis=1)
+        consis = tf.exp(-tf.pow(diff, 2) / adaptive_temp)
         consis = tf.where(consis > args.eps, consis, 0)
         return consis
 
@@ -233,7 +233,7 @@ def compute_diffusion_matrix(dst_nodes, neigh_dict, sample_size,
         v[ns] = 1
         return v
 
-    # sample neighbors
+    # sample neighbors with adaptive weighting and class bias.
     adj_mat_full = np.stack([vectorize(sample(n, neigh_dict[n]))
                              for n in dst_nodes])
     nonzero_cols_mask = np.any(adj_mat_full.astype(bool), axis=0)
