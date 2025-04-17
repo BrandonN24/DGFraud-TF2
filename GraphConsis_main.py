@@ -25,7 +25,7 @@ import matplotlib.pyplot as plt
 # Create a function to plot confusion matrix that can be reused
 def plot_confusion_matrix(y_true, y_pred, epoch=None, phase="test"):
     # Create directory for confusion matrices if it doesn't exist
-    os.makedirs("confusion_matrices for 6 epochs", exist_ok=True)
+    os.makedirs(f"confusion_matrices for {args.epochs} epochs", exist_ok=True)
     
     # File name prefix based on epoch and phase
     prefix = f"{phase}_epoch_{epoch}_" if epoch is not None else f"{phase}_final_"
@@ -47,7 +47,7 @@ def plot_confusion_matrix(y_true, y_pred, epoch=None, phase="test"):
     if epoch is not None:
         title += f' - Epoch {epoch}'
     plt.title(title)
-    plt.savefig(f'confusion_matrices for 6 epochs/{prefix}confusion_matrix.png')
+    plt.savefig(f'confusion_matrices for {args.epochs} epochs/{prefix}confusion_matrix.png')
     plt.close()
     
     # Normalized confusion matrix (shows percentages)
@@ -114,7 +114,7 @@ def GraphConsis_main(neigh_dicts, features, labels, masks, num_classes, args):
 
     model = GraphConsis(features.shape[-1], args.nhid,
                         len(args.sample_sizes), num_classes, len(neigh_dicts))
-    optimizer = tf.keras.optimizers.SGD(learning_rate=args.lr)
+    optimizer = tf.keras.optimizers.Adam(learning_rate=args.lr)
     loss_fn = tf.keras.losses.SparseCategoricalCrossentropy()
 
     for epoch in range(args.epochs):
