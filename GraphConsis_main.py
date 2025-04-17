@@ -61,7 +61,7 @@ def plot_confusion_matrix(y_true, y_pred, epoch=None, phase="test"):
     disp = ConfusionMatrixDisplay(confusion_matrix=cm_normalized)
     disp.plot(cmap=plt.cm.Blues, values_format='.2%')
     plt.title(f'Normalized {title}')
-    plt.savefig(f'confusion_matrices for 6 epochs/{prefix}confusion_matrix_normalized.png')
+    plt.savefig(f'confusion_matrices for {args.epochs} epochs/{prefix}confusion_matrix_normalized.png')
     plt.close()
     
     return cm
@@ -74,10 +74,10 @@ parser.add_argument('--epochs', type=int, default=6,
 parser.add_argument('--batch_size', type=int, default=512, help='batch size')
 parser.add_argument('--train_size', type=float, default=0.8,
                     help='training set percentage')
-parser.add_argument('--lr', type=float, default=0.5, help='learning rate')
+parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
 parser.add_argument('--nhid', type=int, default=128,
                     help='number of hidden units')
-parser.add_argument('--sample_sizes', type=list, default=[5, 5],
+parser.add_argument('--sample_sizes', type=list, default=[10, 5],
                     help='number of samples for each layer')
 parser.add_argument('--identity_dim', type=int, default=0,
                     help='dimension of context embedding')
