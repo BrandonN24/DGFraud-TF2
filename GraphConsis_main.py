@@ -16,16 +16,57 @@ import tensorflow as tf
 from algorithms.GraphConsis.GraphConsis import GraphConsis
 from utils.data_loader import load_data_yelp
 from utils.utils import preprocess_feature
-
+import os
 import warnings
 
-# Suppress this specific warning
-warnings.filterwarnings('ignore', category=RuntimeWarning, message='invalid value encountered in divide')
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+import matplotlib.pyplot as plt
+
+# Create a function to plot confusion matrix that can be reused
+def plot_confusion_matrix(y_true, y_pred, epoch=None, phase="test"):
+    # Create directory for confusion matrices if it doesn't exist
+    os.makedirs("confusion_matrices for 6 epochs", exist_ok=True)
+    
+    # File name prefix based on epoch and phase
+    prefix = f"{phase}_epoch_{epoch}_" if epoch is not None else f"{phase}_final_"
+    
+    # Create the confusion matrix
+    cm = confusion_matrix(y_true, y_pred)
+    
+    # Print the raw confusion matrix
+    print(f"{phase.capitalize()} Confusion Matrix:")
+    print(cm)
+    
+    # Create a visual display of the confusion matrix
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm)
+    
+    # Plot the confusion matrix
+    plt.figure(figsize=(10, 8))
+    disp.plot(cmap=plt.cm.Blues, values_format='d')
+    title = f'{phase.capitalize()} Confusion Matrix'
+    if epoch is not None:
+        title += f' - Epoch {epoch}'
+    plt.title(title)
+    plt.savefig(f'confusion_matrices for 6 epochs/{prefix}confusion_matrix.png')
+    plt.close()
+    
+    # Normalized confusion matrix (shows percentages)
+    cm_normalized = confusion_matrix(y_true, y_pred, normalize='true')
+    
+    # Plot the normalized confusion matrix
+    plt.figure(figsize=(10, 8))
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm_normalized)
+    disp.plot(cmap=plt.cm.Blues, values_format='.2%')
+    plt.title(f'Normalized {title}')
+    plt.savefig(f'confusion_matrices for 6 epochs/{prefix}confusion_matrix_normalized.png')
+    plt.close()
+    
+    return cm
 
 # init the common args, expect the model specific args
 parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=717, help='random seed')
-parser.add_argument('--epochs', type=int, default=5,
+parser.add_argument('--epochs', type=int, default=6,
                     help='number of epochs to train')
 parser.add_argument('--batch_size', type=int, default=512, help='batch size')
 parser.add_argument('--train_size', type=float, default=0.8,
@@ -79,9 +120,9 @@ def GraphConsis_main(neigh_dicts, features, labels, masks, num_classes, args):
     for epoch in range(args.epochs):
         print(f"Epoch {epoch:d}: training...")
         minibatch_generator = generate_training_minibatch(train_nodes,
-                                                          labels,
-                                                          args.batch_size,
-                                                          features)
+                                                        labels,
+                                                        args.batch_size,
+                                                        features)
         batchs = len(train_nodes) / args.batch_size
         for inputs, inputs_labels in tqdm(minibatch_generator, total=batchs):
 
@@ -89,29 +130,39 @@ def GraphConsis_main(neigh_dicts, features, labels, masks, num_classes, args):
                 predicted = model(inputs, features)
                 loss = loss_fn(tf.convert_to_tensor(inputs_labels), predicted)
                 acc = accuracy_score(inputs_labels,
-                                     predicted.numpy().argmax(axis=1))
+                                    predicted.numpy().argmax(axis=1))
             grads = tape.gradient(loss, model.trainable_weights)
             optimizer.apply_gradients(zip(grads, model.trainable_weights))
             print(f" loss: {loss.numpy():.4f}, acc: {acc:.4f}")
-
-        # validation
+        
+        # validation - do this BEFORE trying to plot validation confusion matrix
         print("Validating...")
         val_results = model(build_batch(val_nodes, neigh_dicts,
                                         args.sample_sizes, features), features)
         loss = loss_fn(tf.convert_to_tensor(labels[val_nodes]), val_results)
         val_acc = accuracy_score(labels[val_nodes],
-                                 val_results.numpy().argmax(axis=1))
+                                val_results.numpy().argmax(axis=1))
         print(f" Epoch: {epoch:d}, "
-              f"loss: {loss.numpy():.4f}, "
-              f"acc: {val_acc:.4f}")
+            f"loss: {loss.numpy():.4f}, "
+            f"acc: {val_acc:.4f}")
+        
+        # Now plot validation confusion matrix AFTER computing val_results
+        print(f"Generating validation confusion matrix for epoch {epoch}...")
+        val_predictions = val_results.numpy().argmax(axis=1)
+        val_true_labels = labels[val_nodes].flatten()
+        plot_confusion_matrix(val_true_labels, val_predictions, epoch=epoch, phase="validation")
+        
+        print(f"Confusion matrix for epoch {epoch} saved in 'confusion_matrices/' directory")
+
+    # For the testing part, you can use the plot_confusion_matrix function
+    # to be consistent with the epoch validation:
 
     # testing
     print("Testing...")
     results = model(build_batch(test_nodes, neigh_dicts,
                                 args.sample_sizes, features), features)
-    
-        # F1 score, precision, recall, etc.
-    # You can use sklearn.metrics to calculate these metrics
+
+    # F1 score, precision, recall, etc.
     from sklearn.metrics import f1_score, precision_score, recall_score
     f1 = f1_score(labels[test_nodes], results.numpy().argmax(axis=1), average='weighted')
     precision = precision_score(labels[test_nodes], results.numpy().argmax(axis=1), average='weighted')
@@ -122,10 +173,18 @@ def GraphConsis_main(neigh_dicts, features, labels, masks, num_classes, args):
     from sklearn.metrics import roc_auc_score
     roc_auc = roc_auc_score(labels[test_nodes], results.numpy()[:, 1])
     test_acc = accuracy_score(labels[test_nodes],
-                              results.numpy().argmax(axis=1))
+                            results.numpy().argmax(axis=1))
     print(f"Roc Auc:{roc_auc:.4f}")
     print(f"Test acc: {test_acc:.4f}")
-   
+
+    # Calculate and plot confusion matrix using our function
+    y_true = labels[test_nodes].flatten()
+    y_pred = results.numpy().argmax(axis=1)
+    plot_confusion_matrix(y_true, y_pred, phase="test")
+
+
+    # Suppress this specific warning
+    warnings.filterwarnings('ignore', category=RuntimeWarning, message='invalid value encountered in divide')
 
 
 def build_batch(nodes: list, neigh_dicts: dict, sample_sizes: list,
