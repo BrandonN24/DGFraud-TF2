@@ -32,10 +32,10 @@ parser.add_argument('--epochs', type=int, default=5,
 parser.add_argument('--batch_size', type=int, default=512, help='batch size')
 parser.add_argument('--train_size', type=float, default=0.8,
                     help='training set percentage')
-parser.add_argument('--lr', type=float, default=0.5, help='learning rate')
+parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
 parser.add_argument('--nhid', type=int, default=128,
                     help='number of hidden units')
-parser.add_argument('--sample_sizes', type=list, default=[5, 5],
+parser.add_argument('--sample_sizes', type=list, default=[10, 5],
                     help='number of samples for each layer')
 parser.add_argument('--identity_dim', type=int, default=0,
                     help='dimension of context embedding')
