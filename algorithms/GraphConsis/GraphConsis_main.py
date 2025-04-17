@@ -123,7 +123,7 @@ def GraphConsis_main(neigh_dicts, features, labels, masks, num_classes, args):
     #     print(var.name, var.shape)
     # print("Trainable variables end")
 
-    optimizer = tf.keras.optimizers.SGD(learning_rate=args.lr)
+    optimizer = tf.keras.optimizers.Adam(learning_rate=args.lr)
     loss_fn = tf.keras.losses.SparseCategoricalCrossentropy()
 
     for epoch in range(args.epochs):
