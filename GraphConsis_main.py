@@ -167,9 +167,9 @@ def GraphConsis_main(neigh_dicts, features, labels, masks, num_classes, args):
 
     # F1 score, precision, recall, etc.
     from sklearn.metrics import f1_score, precision_score, recall_score
-    f1 = f1_score(labels[test_nodes], results.numpy().argmax(axis=1), average='weighted')
-    precision = precision_score(labels[test_nodes], results.numpy().argmax(axis=1), average='weighted')
-    recall = recall_score(labels[test_nodes], results.numpy().argmax(axis=1), average='weighted')
+    f1 = f1_score(labels[test_nodes], results.numpy().argmax(axis=1))
+    precision = precision_score(labels[test_nodes], results.numpy().argmax(axis=1))
+    recall = recall_score(labels[test_nodes], results.numpy().argmax(axis=1))
     print(f"F1 score: {f1:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}")
 
     # ROC-AUC score
