@@ -6,3 +6,9 @@ DGFraud_TF2.egg-info/SOURCES.txt
 DGFraud_TF2.egg-info/dependency_links.txt
 DGFraud_TF2.egg-info/requires.txt
 DGFraud_TF2.egg-info/top_level.txt
+algorithms/__init__.py
+algorithms/GraphConsis/GraphConsis.py
+algorithms/GraphConsis/GraphConsis_main.py
+algorithms/GraphConsis/__init__.py
+layers/__init__.py
+layers/layers.py

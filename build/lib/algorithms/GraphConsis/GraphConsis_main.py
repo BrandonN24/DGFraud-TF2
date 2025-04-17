@@ -73,7 +73,7 @@ def GraphConsis_main(neigh_dicts, features, labels, masks, num_classes, args):
 
     model = GraphConsis(features.shape[-1], args.nhid,
                         len(args.sample_sizes), num_classes, len(neigh_dicts))
-    optimizer = tf.keras.optimizers.Adam(learning_rate=args.lr)
+    optimizer = tf.keras.optimizers.adam(learning_rate=args.lr)
     loss_fn = tf.keras.losses.SparseCategoricalCrossentropy()
 
     for epoch in range(args.epochs):
