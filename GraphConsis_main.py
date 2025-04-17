@@ -22,6 +22,9 @@ import warnings
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 import matplotlib.pyplot as plt
 
+# Suppress this specific warning
+warnings.filterwarnings('ignore', category=RuntimeWarning, message='invalid value encountered in divide')
+
 # Create a function to plot confusion matrix that can be reused
 def plot_confusion_matrix(y_true, y_pred, epoch=None, phase="test"):
     # Create directory for confusion matrices if it doesn't exist
@@ -181,11 +184,6 @@ def GraphConsis_main(neigh_dicts, features, labels, masks, num_classes, args):
     y_true = labels[test_nodes].flatten()
     y_pred = results.numpy().argmax(axis=1)
     plot_confusion_matrix(y_true, y_pred, phase="test")
-
-
-    # Suppress this specific warning
-    warnings.filterwarnings('ignore', category=RuntimeWarning, message='invalid value encountered in divide')
-
 
 def build_batch(nodes: list, neigh_dicts: dict, sample_sizes: list,
                 features: np.array) -> [namedtuple]:
