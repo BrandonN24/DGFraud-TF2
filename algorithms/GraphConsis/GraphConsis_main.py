@@ -99,7 +99,7 @@ def GraphConsis_main(neigh_dicts, features, labels, masks, num_classes, args, cl
     train_nodes, val_nodes, test_nodes = masks
 
     model = GraphConsis(features.shape[-1], args.nhid, len(args.sample_sizes), num_classes, len(neigh_dicts))
-    optimizer = tf.keras.optimizers.SGD(learning_rate=args.lr)
+    optimizer = tf.keras.optimizers.Adam(learning_rate=args.lr)
     loss_fn = tf.keras.losses.SparseCategoricalCrossentropy()
 
     def generate_training_minibatch(nodes_for_training, all_labels, batch_size, features, cur_temp, class_weights):
