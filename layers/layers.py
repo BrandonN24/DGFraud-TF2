@@ -463,6 +463,8 @@ class ImprovedConsisMeanAggregator(SageMeanAggregator):
         """
         super().__init__(src_dim, dst_dim, activ=False, **kwargs)
 
+        self.dst_dim = dst_dim
+        self.src_dim = src_dim
         self.num_heads = num_heads
         self.num_relations = num_relations
 
@@ -470,6 +472,8 @@ class ImprovedConsisMeanAggregator(SageMeanAggregator):
         assert dst_dim % num_heads == 0, f"dst_dim must be divisible by num_heads ({num_heads})"
         self.head_dim = dst_dim // num_heads # dimension per head
     
+
+    def build(self, input_shape):
         # Create relation importance weights for each head
         # This allows the model to learn which heads are most important for which relation types
         self.relation_importance = self.add_weight(
@@ -503,13 +507,15 @@ class ImprovedConsisMeanAggregator(SageMeanAggregator):
 
         # Output projection to go from (num_heads * dst_dim) back to dst_dim
         self.output_projection = self.add_weight(
-            shape=(dst_dim, dst_dim),
+            shape=(self.dst_dim, self.dst_dim),
             initializer="glorot_uniform",
             trainable=True,
             name="output_projection"
         )
 
         self.norm = tf.keras.layers.LayerNormalization(epsilon=1e-5)
+
+        super(ImprovedConsisMeanAggregator, self).build(input_shape)
 
     def __call__(self, dstsrc_features, dstsrc2src, dstsrc2dst, dif_mat,
                  relation_vec, relation_vectors, attention_vec):
@@ -542,6 +548,7 @@ class ImprovedConsisMeanAggregator(SageMeanAggregator):
     
         # Create some relation importance weights
         relation_scale = tf.nn.softmax(tf.gather(self.relation_importance, relation_index))
+        # relation_scale = tf.squeeze(relation_scale) # shape beocomes [num_heads]
 
         # Multi-head attention
         head_outputs = []
