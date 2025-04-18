@@ -69,7 +69,7 @@ def plot_confusion_matrix(y_true, y_pred, epoch=None, phase="test"):
 # init the common args, expect the model specific args
 parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=717, help='random seed')
-parser.add_argument('--epochs', type=int, default=6,
+parser.add_argument('--epochs', type=int, default=4,
                     help='number of epochs to train')
 parser.add_argument('--batch_size', type=int, default=512, help='batch size')
 parser.add_argument('--train_size', type=float, default=0.8,
