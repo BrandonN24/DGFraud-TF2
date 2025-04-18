@@ -9,7 +9,8 @@ import argparse
 import numpy as np
 from collections import namedtuple
 from tqdm import tqdm
-from sklearn.metrics import accuracy_score, confusion_matrix, f1_score, roc_auc_score, precision_score
+from sklearn.metrics import accuracy_score, confusion_matrix, f1_score, roc_auc_score, precision_score, recall_score, ConfusionMatrixDisplay
+import matplotlib.pyplot as plt
 
 import tensorflow as tf
 
@@ -27,8 +28,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=717, help='random seed')
 parser.add_argument('--epochs', type=int, default=6, help='number of epochs to train')
 parser.add_argument('--batch_size', type=int, default=512, help='batch size')
-parser.add_argument('--train_size', type=float, default=0.001, help='training set percentage')
-parser.add_argument('--lr', type=float, default=0.5, help='learning rate')
+parser.add_argument('--train_size', type=float, default=0.8, help='training set percentage')
+parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
 parser.add_argument('--nhid', type=int, default=128, help='number of hidden units')
 parser.add_argument('--sample_sizes', type=list, default=[10, 5], help='number of samples for each layer')
 parser.add_argument('--identity_dim', type=int, default=0, help='dimension of context embedding')
@@ -42,25 +43,25 @@ args = parser.parse_args()
 np.random.seed(args.seed)
 tf.random.set_seed(args.seed)
 
-def evaluate_in_batches(nodes, batch_size, features, neigh_dicts, cur_temp, labels, class_weights, model):
-    all_logits = []  # Renamed from all_preds to all_logits
-    all_true = []
-    for i in range(0, len(nodes), batch_size):
-        batch_nodes = nodes[i:i+batch_size]
-        batch = build_batch(batch_nodes, neigh_dicts, args.sample_sizes, features, cur_temp, labels, class_weights)
-        logits = model(batch, features)  # Return logits (raw output)
-        all_logits.append(logits.numpy())
-        all_true.append(labels[batch_nodes])
-    all_logits = np.concatenate(all_logits, axis=0)
-    all_true = np.concatenate(all_true, axis=0).flatten()
-    return all_true, all_logits
+# def evaluate_in_batches(nodes, batch_size, features, neigh_dicts, cur_temp, labels, class_weights, model):
+#     all_logits = []  # Renamed from all_preds to all_logits
+#     all_true = []
+#     for i in range(0, len(nodes), batch_size):
+#         batch_nodes = nodes[i:i+batch_size]
+#         batch = build_batch(batch_nodes, neigh_dicts, args.sample_sizes, features, cur_temp, labels, class_weights)
+#         logits = model(batch, features)  # Return logits (raw output)
+#         all_logits.append(logits.numpy())
+#         all_true.append(labels[batch_nodes])
+#     all_logits = np.concatenate(all_logits, axis=0)
+#     all_true = np.concatenate(all_true, axis=0).flatten()
+#     return all_true, all_logits
 
 
 def GraphConsis_main(neigh_dicts, features, labels, masks, num_classes, args, class_weights):
     train_nodes, val_nodes, test_nodes = masks
 
     model = GraphConsis(features.shape[-1], args.nhid, len(args.sample_sizes), num_classes, len(neigh_dicts))
-    optimizer = tf.keras.optimizers.SGD(learning_rate=args.lr)
+    optimizer = tf.keras.optimizers.Adam(learning_rate=args.lr)
     loss_fn = tf.keras.losses.SparseCategoricalCrossentropy()
 
     def generate_training_minibatch(nodes_for_training, all_labels, batch_size, features, cur_temp, class_weights):
@@ -90,35 +91,49 @@ def GraphConsis_main(neigh_dicts, features, labels, masks, num_classes, args, cl
         for inputs, inputs_labels in tqdm(minibatch_generator, total=batches):
             with tf.GradientTape() as tape:
                 predicted = model(inputs, features)
+                # calculate training metrics
                 loss = loss_fn(tf.convert_to_tensor(inputs_labels), predicted)
-                _ = accuracy_score(inputs_labels, predicted.numpy().argmax(axis=1))
+                acc = accuracy_score(inputs_labels,
+                                     predicted.numpy().argmax(axis=1))
+                prec = precision_score(inputs_labels, predicted.numpy().argmax(axis=1), zero_division=0)
+                recall = recall_score(inputs_labels, predicted.numpy().argmax(axis=1), zero_division=0)
+                f1 = f1_score(inputs_labels, predicted.numpy().argmax(axis=1), zero_division=0)
+                # getting probabilities for AUC calculation
+                probs = tf.nn.softmax(tf.convert_to_tensor(predicted.numpy().astype(np.float32))).numpy()[:, 1]
+                auc = roc_auc_score(inputs_labels, probs, multi_class='ovr')
+
             grads = tape.gradient(loss, model.trainable_weights)
+
             optimizer.apply_gradients(zip(grads, model.trainable_weights))
-            print(f" loss: {loss.numpy():.4f}")
+            
+            print(f" loss: {loss.numpy():.4f}, acc: {acc:.4f}, Precision: {prec:.4f}, Recall:  {recall:.4f}, F1-score:  {f1:.4f}, AUC:  {auc:.4f}")
 
-        # Evaluate on the training set.
-        print("\nEvaluating Training Set:")
-        train_true, train_logits = evaluate_in_batches(train_nodes, args.batch_size, features, neigh_dicts, cur_temp, labels, class_weights, model)
-        train_preds = train_logits.argmax(axis=1)
-        print_metrics(train_true, train_logits, train_preds, num_classes)
+        # validation
+        print("Validating...")
+        val_results = model(build_batch(val_nodes, neigh_dicts,
+                                        args.sample_sizes, features, cur_temp, labels, class_weights), features)
+        loss = loss_fn(tf.convert_to_tensor(labels[val_nodes]), val_results)
+        # Printing loss for validation set
+        print(f" Epoch: {epoch:d}\nLoss: {loss.numpy():.4f}")
+        # Printing metrics for validation set
+        print_metrics(labels[val_nodes], val_results.numpy(), val_results.numpy().argmax(axis=1), num_classes, stage=f'Validation | Epoch: {epoch}')
 
-    # Evaluate on the validation set.
-    print("\nValidating:")
-    val_true, val_logits = evaluate_in_batches(val_nodes, args.batch_size, features, neigh_dicts, cur_temp, labels, class_weights, model)
-    val_preds = val_logits.argmax(axis=1)
-    print_metrics(val_true, val_logits, val_preds, num_classes)
-
-    # Testing.
-    print("\nTesting:")
-    test_true, test_logits = evaluate_in_batches(test_nodes, args.batch_size, features, neigh_dicts, cur_temp, labels, class_weights, model)
-    test_preds = test_logits.argmax(axis=1)
-    print_metrics(test_true, test_logits, test_preds, num_classes)
+    # testing
+    print("\nTesting...")
+    results = model(build_batch(test_nodes, neigh_dicts,
+                                args.sample_sizes, features, cur_temp, labels, class_weights), features)
+    loss = loss_fn(tf.convert_to_tensor(labels[test_nodes]), results)
+    # Printing loss for test set
+    print(f"Loss: {loss.numpy():.4f}")
+    # Printing metrics for test set
+    print_metrics(labels[test_nodes], results.numpy(), results.numpy().argmax(axis=1), num_classes, stage='Testing')
 
 
-def print_metrics(true_labels, logits, hard_preds, num_classes):
+def print_metrics(true_labels, logits, hard_preds, num_classes, stage):
     acc = accuracy_score(true_labels, hard_preds)
-    prec = precision_score(true_labels, hard_preds, average='macro', zero_division=0)
-    f1 = f1_score(true_labels, hard_preds, average='macro', zero_division=0)
+    prec = precision_score(true_labels, hard_preds, zero_division=0)
+    recall = recall_score(true_labels, hard_preds, zero_division=0)
+    f1 = f1_score(true_labels, hard_preds, zero_division=0)
     cm = confusion_matrix(true_labels, hard_preds)
     if num_classes == 2:
         # Convert logits to float32 for softmax and then compute probabilities.
@@ -128,10 +143,22 @@ def print_metrics(true_labels, logits, hard_preds, num_classes):
         auc = roc_auc_score(true_labels, logits, multi_class='ovr')
     print(f"Accuracy:  {acc:.4f}")
     print(f"Precision: {prec:.4f}")
+    print(f'Recall:    {recall:.4f}')
     print(f"F1-score:  {f1:.4f}")
     print(f"AUC:       {auc:.4f}")
     print("Confusion Matrix:")
     print(cm)
+
+    # Create a visual display of the confusion matrix
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm)
+
+    # Plot the confusion matrix
+    plt.figure(figsize=(10, 8))
+    disp.plot(cmap=plt.cm.Blues, values_format='d')
+    plt.title(f'{stage} Confusion Matrix')
+    stage_filename = stage.replace(" ", "").replace("|", "_").replace(":", "_")
+    plt.savefig(f'confusion_matrix_{stage_filename}.png')
+    plt.close()
 
 
 
