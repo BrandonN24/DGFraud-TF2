@@ -542,7 +542,6 @@ class ImprovedConsisMeanAggregator(SageMeanAggregator):
     
         # Create some relation importance weights
         relation_scale = tf.nn.softmax(tf.gather(self.relation_importance, relation_index))
-        relation_scale = tf.squeeze(relation_scale) # shape beocomes [num_heads]
 
         # Multi-head attention
         head_outputs = []
@@ -585,10 +584,15 @@ class ImprovedConsisMeanAggregator(SageMeanAggregator):
             alpha = alpha * gate  # element-wise multiplication
 
             # Apply the relation-specific importance for this head
-            if h == 0 and self.num_heads == 1:
-                alpha = alpha * relation_scale
-            else:
-                alpha = alpha * relation_scale[h]
+            # if h == 0 and self.num_heads == 1:
+            #     alpha = alpha * relation_scale
+            # else:
+            #     alpha = alpha * relation_scale[h]
+
+            # Scale alpha by the relation importance for this head
+            # 1D tensor of shape [batch_size, 1] for each head
+            scale_h = relation_scale[:, h:h+1]
+            alpha = alpha * scale_h # element-wise multiplication
 
             # tf.print("Alpha mean (head", h, "):", tf.reduce_mean(alpha), summarize=10)
 
