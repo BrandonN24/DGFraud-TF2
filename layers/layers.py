@@ -548,7 +548,6 @@ class ImprovedConsisMeanAggregator(SageMeanAggregator):
     
         # Create some relation importance weights
         relation_scale = tf.nn.softmax(tf.gather(self.relation_importance, relation_index))
-        # relation_scale = tf.squeeze(relation_scale) # shape beocomes [num_heads]
 
         # Multi-head attention
         head_outputs = []
@@ -568,6 +567,7 @@ class ImprovedConsisMeanAggregator(SageMeanAggregator):
             # Concatenate node features with relation features for this head
             head_concat_features = tf.concat([x_slice, relation_slice], axis=1) # [1147, 64] if using 4 heads
 
+            # Normalize the concatenated features
             head_concat_features = self.norm(head_concat_features)
 
             # Use class-specific attention vectors instead of passed attention_vec param.
