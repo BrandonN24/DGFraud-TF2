@@ -583,25 +583,13 @@ class ImprovedConsisMeanAggregator(SageMeanAggregator):
             # Gating score (between 0 and 1) relu with clipping
             gate = tf.sigmoid(tf.matmul(head_concat_features, self.gate_weights[h]) + self.gate_bias[h]) # shape: [batch_size, 1]
 
-            # uncomment to use relu with clipping instead
-            # gate = tf.nn.relu(tf.matmul(head_concat_features, self.gate_weights[h]))  # shape: [batch_size, 1]
-            # gate = tf.clip_by_value(gate, 0.0, 1.0)
-
             # Apply the gate to alpha
             alpha = alpha * gate  # element-wise multiplication
-
-            # Apply the relation-specific importance for this head
-            # if h == 0 and self.num_heads == 1:
-            #     alpha = alpha * relation_scale
-            # else:
-            #     alpha = alpha * relation_scale[h]
 
             # Scale alpha by the relation importance for this head
             # 1D tensor of shape [batch_size, 1] for each head
             scale_h = relation_scale[:, h:h+1]
             alpha = alpha * scale_h # element-wise multiplication
-
-            # tf.print("Alpha mean (head", h, "):", tf.reduce_mean(alpha), summarize=10)
 
             # Apply attention to this head's feature slice
             alpha_expanded = tf.tile(alpha, [1, self.head_dim])
