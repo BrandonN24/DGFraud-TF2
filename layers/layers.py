@@ -505,14 +505,6 @@ class ImprovedConsisMeanAggregator(SageMeanAggregator):
             name="gate_bias"
         )
 
-        # Output projection to go from (num_heads * dst_dim) back to dst_dim
-        self.output_projection = self.add_weight(
-            shape=(self.dst_dim, self.dst_dim),
-            initializer="glorot_uniform",
-            trainable=True,
-            name="output_projection"
-        )
-
         self.norm = tf.keras.layers.LayerNormalization(epsilon=1e-5)
 
         super(ImprovedConsisMeanAggregator, self).build(input_shape)
@@ -616,11 +608,7 @@ class ImprovedConsisMeanAggregator(SageMeanAggregator):
         # multi_head_output shape: [batch_size, num_heads*head_dim = dst_dim]
         multi_head_output = tf.concat(head_outputs, axis=1)
 
-        # Project back to dst_dim
-        # final_output shape: [batch_size, dst_dim]
-        final_output = tf.matmul(multi_head_output, self.output_projection)
-
-        return final_output
+        return multi_head_output
 
 
 class AttentionAggregator(layers.Layer):
