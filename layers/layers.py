@@ -436,7 +436,7 @@ class ConsisMeanAggregator(SageMeanAggregator):
         :param tensor relation_vec: 1d corresponding relation vector
         :param tensor attention_vec: 1d layers shared attention weights vector
         """
-        # Equation 5,6 in the paper
+        # Equation 5,6 in the paper  # can change this for improvement because of weights - second area of improvement for project
         x = super().__call__(dstsrc_features, dstsrc2src, dstsrc2dst, dif_mat)
         relation_features = tf.tile([relation_vec], [x.shape[0], 1])
         alpha = tf.matmul(tf.concat([x, relation_features], 1), attention_vec)
@@ -445,6 +445,158 @@ class ConsisMeanAggregator(SageMeanAggregator):
 
         return x
 
+class ImprovedConsisMeanAggregator(SageMeanAggregator):
+    """ GraphConsis Mean Aggregation Layer with Multi-heead Attention
+    Specifically designed to combat cross-relation camouflage by using 
+    multiple attention heads with relation-specific importance scaling.
+
+    Parts of this code file were originally forked from
+    https://github.com/subbyte/graphsage-tf2
+    """
+
+    def __init__(self, src_dim, dst_dim, num_heads=4, num_relations=3, **kwargs):
+        """
+        :param int src_dim: input dimension
+        :param int dst_dim: output dimension
+        :param int num_heads: number of attention heads
+        :param int num_relations: number of relations types in the graph
+        """
+        super().__init__(src_dim, dst_dim, activ=False, **kwargs)
+
+        self.dst_dim = dst_dim
+        self.src_dim = src_dim
+        self.num_heads = num_heads
+        self.num_relations = num_relations
+
+        # Make sure dst_dim is divisible by num_heads
+        assert dst_dim % num_heads == 0, f"dst_dim must be divisible by num_heads ({num_heads})"
+        self.head_dim = dst_dim // num_heads # dimension per head
+    
+
+    def build(self, input_shape):
+        # Create relation importance weights for each head
+        # This allows the model to learn which heads are most important for which relation types
+        self.relation_importance = self.add_weight(
+            shape=(self.num_relations, self.num_heads),
+            initializer="glorot_uniform",
+            trainable=True,
+            name="relation_importance"
+        )
+
+        # Create multiple attention vectors instead of just one
+        self.attention_vectors = self.add_weight(
+            shape=(self.num_heads, 2 * self.head_dim, 1),
+            initializer="glorot_uniform",
+            trainable=True,
+            name="attention_vectors"
+        )
+
+        self.gate_weights = self.add_weight(
+            shape=(self.num_heads, 2 * self.head_dim, 1),
+            initializer="glorot_uniform",
+            trainable=True,
+            name="gate_weights"
+        )
+
+        self.gate_bias = self.add_weight(
+            shape=(self.num_heads, 1),
+            initializer=tf.keras.initializers.Constant(0.5),
+            trainable=True,
+            name="gate_bias"
+        )
+
+        self.norm = tf.keras.layers.LayerNormalization(epsilon=1e-5)
+
+        super(ImprovedConsisMeanAggregator, self).build(input_shape)
+
+    def __call__(self, dstsrc_features, dstsrc2src, dstsrc2dst, dif_mat,
+                 relation_vec, relation_vectors, attention_vec):
+        """
+        :param tensor dstsrc_features: the embedding from the previous layer
+        :param tensor dstsrc2dst: 1d index mapping
+                      (prepraed by minibatch generator)
+        :param tensor dstsrc2src: 1d index mapping
+                      (prepraed by minibatch generator)
+        :param tensor dif_mat: 2d diffusion matrix
+                      (prepraed by minibatch generator)
+        :param tensor relation_vec: 1d corresponding relation vector
+        :param tensor attention_vec: 1d layers shared attention weights vector
+        """
+        # Base aggregation from the parent class
+        # x shape: [batch_size, dst_dim]
+        x = super().__call__(dstsrc_features, dstsrc2src, dstsrc2dst, dif_mat)
+
+        # Expand relation features for each node
+        # relation_features shape: [batch_size, dst_dim]
+        relation_features = tf.tile([relation_vec], [x.shape[0], 1])
+
+        # You need to determine the relations index based on the relation_vec
+        # One approach: find the relation that has the highest similarity with relation_vec
+        relation_similarities = tf.matmul(relation_vec[tf.newaxis, :],
+                                          tf.transpose(relation_vectors))
+        
+        # relation_index shape: [batch_size, 1]
+        relation_index = tf.argmax(relation_similarities, axis=1)
+    
+        # Create some relation importance weights
+        relation_scale = tf.nn.softmax(tf.gather(self.relation_importance, relation_index))
+
+        # Multi-head attention
+        head_outputs = []
+
+        for h in range(self.num_heads):
+            # Exctract the portion of features this head will process
+            start_idx = h * self.head_dim
+            end_idx = (h + 1) * self.head_dim
+
+            # Extract slices for this head
+            x_slice =  x[:, start_idx:end_idx] # [1147, 32] if using 4 heads
+            # dimension of x is [batch_size, dst_dim / num_heads] dst_dim is 128 always.
+
+            relation_slice = relation_features[:, start_idx:end_idx] # [1147, 32] if using 4 heads
+
+            # Concatenate x and relation_features for attention computation
+            # Concatenate node features with relation features for this head
+            head_concat_features = tf.concat([x_slice, relation_slice], axis=1) # [1147, 64] if using 4 heads
+
+            # Normalize the concatenated features
+            head_concat_features = self.norm(head_concat_features)
+
+            # Use class-specific attention vectors instead of passed attention_vec param.
+            head_attention_vec = self.attention_vectors[h] # [64 , 1] if using 4 heads
+
+            # Compute attention scores for each head
+            # alpha shape: [batch_size, 1] - [1147, 1]
+            alpha = tf.matmul(
+                head_concat_features,
+                head_attention_vec
+            )
+
+            # Gating score (between 0 and 1) relu with clipping
+            gate = tf.sigmoid(tf.matmul(head_concat_features, self.gate_weights[h]) + self.gate_bias[h]) # shape: [batch_size, 1]
+
+            # Apply the gate to alpha
+            alpha = alpha * gate  # element-wise multiplication
+
+            # Scale alpha by the relation importance for this head
+            # 1D tensor of shape [batch_size, 1] for each head
+            scale_h = relation_scale[:, h:h+1]
+            alpha = alpha * scale_h # element-wise multiplication
+
+            # Apply attention to this head's feature slice
+            alpha_expanded = tf.tile(alpha, [1, self.head_dim])
+
+            # element-wise multiplication
+            # head_output shape: [batch_size, head_dim]
+            head_output = tf.multiply(alpha_expanded, x_slice)
+
+            head_outputs.append(head_output)
+
+        # Concatenate outputs from all heads
+        # multi_head_output shape: [batch_size, num_heads*head_dim = dst_dim]
+        multi_head_output = tf.concat(head_outputs, axis=1)
+
+        return multi_head_output
 
 class AttentionAggregator(layers.Layer):
     """This layer equals to equation (5) and equation (8) in

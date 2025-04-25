@@ -1,0 +1,5 @@
+If using virtual environment:
+python -m algorithms.GraphConsis.GraphConsis_main
+
+If not using virtual environment:
+py -3.11 -m algorithms.GraphConsis.GraphConsis_main
